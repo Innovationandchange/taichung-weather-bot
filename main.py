@@ -4,7 +4,8 @@ import asyncio
 import datetime
 
 import os
-
+import os
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 # OpenWeatherMap API
 WEATHER_API_KEY = "你的 OpenWeatherMap API Key"
