@@ -3,10 +3,9 @@ import requests
 import asyncio
 import datetime
 
-# Discord bot token
-DISCORD_TOKEN = "你的 Discord Bot Token"
-CHANNEL_ID = 你的頻道 ID (整數)
+import os
 
+CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 # OpenWeatherMap API
 WEATHER_API_KEY = "你的 OpenWeatherMap API Key"
 CITY_NAME = "Taichung,tw"
