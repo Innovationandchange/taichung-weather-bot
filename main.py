@@ -1,44 +1,68 @@
 import discord
+from discord.ext import commands, tasks
 import requests
-import asyncio
+import os
 import datetime
 
-import os
-import os
+# 讀取環境變數
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
-# OpenWeatherMap API
-WEATHER_API_KEY = "你的 OpenWeatherMap API Key"
-CITY_NAME = "Taichung,tw"
-API_URL = f"http://api.openweathermap.org/data/2.5/weather?q={CITY_NAME}&appid={WEATHER_API_KEY}&units=metric&lang=zh_tw"
+CWB_API_KEY = os.getenv("CWB_API_KEY")
+CITY_NAME = "臺中市"
 
+# 天氣 API URL
+CWB_API_URL = (
+    f"https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001"
+    f"?Authorization={CWB_API_KEY}&locationName={CITY_NAME}"
+)
+
+# 初始化 bot，開啟 message content intent
 intents = discord.Intents.default()
-client = discord.Client(intents=intents)
+intents.message_content = True  # ⚠️ 必須開啟才能接收指令
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-async def fetch_weather():
-    response = requests.get(API_URL)
-    data = response.json()
-    description = data['weather'][0]['description']
-    temp = data['main']['temp']
-    feels_like = data['main']['feels_like']
-    humidity = data['main']['humidity']
-    return f"🌤️ 今日台中天氣：{description}\n🌡️ 溫度：{temp}°C（體感 {feels_like}°C）\n💧 濕度：{humidity}%"
+# 取得天氣資訊函式
+def fetch_taichung_weather():
+    try:
+        response = requests.get(CWB_API_URL)
+        data = response.json()
+        location = data['records']['location'][0]
+        weather_elements = location['weatherElement']
+        wx = weather_elements[0]['time'][0]['parameter']['parameterName']
+        pop = weather_elements[1]['time'][0]['parameter']['parameterName']
+        minT = weather_elements[2]['time'][0]['parameter']['parameterName']
+        maxT = weather_elements[4]['time'][0]['parameter']['parameterName']
 
-async def daily_weather_task():
-    await client.wait_until_ready()
-    channel = client.get_channel(CHANNEL_ID)
-    while not client.is_closed():
-        now = datetime.datetime.now()
-        # 每天早上 8 點發送
-        if now.hour == 8 and now.minute == 0:
-            weather_report = await fetch_weather()
-            await channel.send(weather_report)
-            await asyncio.sleep(60)  # 避免重複發送
-        await asyncio.sleep(30)
+        return (
+            f"📍 **{CITY_NAME} 今日天氣預報**\n"
+            f"🌤️ 天氣狀況：{wx}\n"
+            f"🌡️ 氣溫：{minT}°C - {maxT}°C\n"
+            f"🌧️ 降雨機率：{pop}%"
+        )
+    except Exception as e:
+        return "⚠️ 無法取得天氣資料"
 
-@client.event
+# 機器人上線後事件
+@bot.event
 async def on_ready():
-    print(f'已登入為 {client.user}')
-    client.loop.create_task(daily_weather_task())
+    print(f"✅ Bot 已上線：{bot.user}")
+    send_daily_weather.start()
 
-client.run(DISCORD_TOKEN)
+# 指令：!天氣
+@bot.command()
+async def 天氣(ctx):
+    report = fetch_taichung_weather()
+    await ctx.send(report)
+
+# 每天早上 8:00 自動發送天氣
+@tasks.loop(minutes=1.0)
+async def send_daily_weather():
+    now = datetime.datetime.now()
+    if now.hour == 8 and now.minute == 0:
+        channel = bot.get_channel(CHANNEL_ID)
+        if channel:
+            report = fetch_taichung_weather()
+            await channel.send(report)
+
+# 啟動 Bot
+bot.run(DISCORD_TOKEN)
